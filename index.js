@@ -23,7 +23,9 @@ var sessionInfo = {
         fastestLap: null,
     },
     track: {
-      name: "Unkown Track",
+      name: "Unknown Track",
+      id: -1,
+      longName: "unknown track",
       city: "Unknown City",
       country: "Unknown Country",  
       temperature: "N/A",
@@ -65,6 +67,7 @@ const init = async () => {
         sessionInfo.session.fastestLap = evt.data.SessionInfo.Sessions[sessionInfo.session.number].ResultsFastestLap;
         sessionInfo.track = {
             name: evt.data.WeekendInfo.TrackDisplayName,
+            id: evt.data.WeekendInfo.TrackID,
             city: evt.data.WeekendInfo.TrackCity,
             country: evt.data.WeekendInfo.TrackCountry,
             temperature: evt.data.WeekendInfo.TrackSurfaceTemp,
@@ -99,6 +102,7 @@ const init = async () => {
                         lap: 0,
                         lapsCompleted: 0,
                         fastRepairsUsed: 0,
+                        lapPercent: 0,
                     },
                     carData: {
                         trackSurface: "OnTrack",
@@ -131,6 +135,7 @@ const init = async () => {
                 type: sessionInfo.session.type,
                 timeRemaining: evt.values.SessionTimeRemain,
                 fastRepairs: sessionInfo.session.fastRepairs,
+                fastestLap: sessionInfo.session.fastestLap,
             },
             track: sessionInfo.track,
             weather: sessionInfo.weather,
@@ -153,6 +158,7 @@ const init = async () => {
             sessionRacers[i].lapTimes.best.lap = evt.values.CarIdxBestLapNum[_idx];
             sessionRacers[i].flags = evt.values.CarIdxSessionFlags[_idx];
             sessionRacers[i].raceData.fastRepairsUsed = evt.values.CarIdxFastRepairsUsed[_idx];
+            sessionRacers[i].raceData.lapPercent = evt.values.CarIdxLapDistPct[_idx];
         }
 
         driverData = {
