@@ -4,10 +4,14 @@ var iracing = require('node-irsdk-2021').getInstance({
 })
 const io =  require('socket.io-client');
 const chalk = require('chalk');
+const fs = require('fs');
+const { prompt } = require('enquirer');
 
 var options = {
     updateInterval: 1000,
     sessionNum: 0,
+    channel: 'pennyarcade',
+    isStreamer: true,
 }
 
 var sessionRacers = []
@@ -46,17 +50,93 @@ var driverData = {
     fuel: { remaining: 0, percent: 0}
 }
 
+const firstTimeSetup = async () => {
+    console.log(chalk.bold("Performing First Time Setup"));
+
+    let answers = {
+        isStreamer: null,
+        username: null
+    }
+
+    let isStreamer = {
+        type: 'confirm',
+        name: 'is_twitch',
+        message: 'Do you stream iRacing on Twitch?'
+    }
+
+    let twitchUsername = {
+        type: 'input',
+        name: 'channel_name',
+        message: 'What is your Twitch username?',
+        validate: (a) => {
+            if (!a) return false;
+            else return true;
+        }
+    }
+
+    let otherUsername = {
+        type: 'input',
+        name: 'username',
+        message: 'What name would you like to go by on the Pit Wall?',
+        validate: (a) => {
+            if (!a) return false;
+            else return true;
+        }
+    }
+
+    prompt(isStreamer)
+        .then((r) => {
+            if (r.is_twitch) {
+                setTimeout(() => {
+                    prompt(twitchUsername)
+                        .then((r2) => {
+                            answers.isStreamer = r.is_twitch;
+                            answers.username = r2.channel_name;
+
+                            options.channel = answers.username;
+                            options.isStreamer = answers.isStreamer;
+
+                            fs.writeFileSync('./options.json', JSON.stringify(answers, null, 4));
+                            init();
+                        })
+                }, 1000)
+            } else {
+                setTimeout(() => {
+                    prompt(otherUsername)
+                        .then((r2) => {
+                            answers.isStreamer = r.is_twitch;
+                            answers.username = r2.username;
+
+                            options.channel = answers.username;
+                            options.isStreamer = answers.isStreamer;
+
+                            fs.writeFileSync('./options.json', JSON.stringify(answers, null, 4));
+                            init();
+                        })
+                }, 1000)
+            }
+        })
+}
+
 const init = async () => {
     console.clear();
     console.log("Status: " + chalk.yellow("WAITING"));
-    console.log("Waiting to go racing, when an iRacing instance is detected something cool will happen");
+    console.log("Waiting to go racing, when an iRacing instance is detected you will automatically be connected to the Gabir Motors Pit Wall");
+
+    let timeout = setTimeout(() => {
+        console.log(chalk.red("\n\n\n If this is your first time running this app and it is having trouble connecting, try restarting it."))
+    }, 5000)
 
     const Streaming = io("https://streaming.gabirmotors.com")
 
     iracing.on('Connected', function (evt) {
-        Streaming.emit("connected_standings", "true");
+        clearTimeout(timeout);
+
         console.clear();
+        console.log(chalk.italic(chalk.gray("GABIR MOTORS PIT WALL V1.3")))
         console.log("Status: " + chalk.green("CONNECTED"));
+        console.log(`Hello ${chalk.bold(options.channel)}, you are now connected to the Gabir Motors Pit Wall!`)
+        console.log(`\n\nYour Link: https://pitwall.gabirmotors.com/${options.channel}`)
     })
 
     iracing.on('SessionInfo', function (evt) {
@@ -79,8 +159,6 @@ const init = async () => {
             skies: evt.data.WeekendInfo.TrackSkies
         }
 
-        console.log("Session Update");
-        // console.log(drivers)
         sessionRacers = [];
 
         for (var i = 0; i < drivers.length - 1; i ++) {
@@ -120,10 +198,7 @@ const init = async () => {
                     flags: []
                 })
             }
-            console.log(sessionRacers)
         }
-    
-        console.log(sessionRacers)
     })
 
     iracing.on('Telemetry', function (evt) {
@@ -203,7 +278,7 @@ const init = async () => {
                 fastestLap: null
             },
             track: {
-              name: "Unkown Track",
+              name: "Unknown Track",
               city: "Unknown City",
               country: "Unknown Country",  
               temperature: "N/A",
@@ -224,13 +299,36 @@ const init = async () => {
 
     setInterval(() => { 
         if (sessionRacers.length < 1) return;
-        console.log("Sent a list of " + sessionRacers.length + " drivers")
         Streaming.emit("standings", JSON.stringify({
             sessionInfo, 
             sessionRacers,
-            driverData
+            driverData,
+            options: {
+                channel: options.channel,
+                isStreamer: options.isStreamer
+            }
         }))
     }, options.updateInterval)
+
+    Streaming.emit("awake", options.channel);
+
+    Streaming.on("check_awake", (d) => {
+        Streaming.emit("awake", options.channel);
+    })
 }
 
-init();
+try {
+    if (fs.existsSync('./options.json')) {
+        let fileData = fs.readFileSync('./options.json', "utf8");
+        let parsed = JSON.parse(fileData);
+
+        options.channel = parsed.username;
+        options.isStreamer = parsed.isStreamer;
+
+        init();
+    } else {
+        firstTimeSetup();
+    }
+} catch (e) {
+    firstTimeSetup();
+}
